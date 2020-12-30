@@ -1,0 +1,30 @@
+{
+  "name": "ufop",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "serve": "node -r dotenv/config index.js"
+  },
+  "engines": {
+    "node": "15.4.0",
+    "npm": "7.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "^7.12.10",
+    "@babel/eslint-parser": "^7.12.1",
+    "@babel/plugin-syntax-top-level-await": "^7.12.1",
+    "dotenv": "^8.2.0",
+    "eslint": "^7.16.0",
+    "eslint-config-airbnb-base": "^14.2.1",
+    "eslint-plugin-node": "^11.1.0"
+  },
+  "dependencies": {
+    "pg": "^8.5.1",
+    "unzipper": "^0.10.11"
+  }
+}

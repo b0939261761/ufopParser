@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  parser:
+    image: node:15.5.0
+    command: >
+      bash -c "
+      cd /app
+      && npm install --production
+      && node index.js"
+    volumes:
+      - .:/app
+    env_file: .env
+    depends_on:
+      - db
