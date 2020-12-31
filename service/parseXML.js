@@ -1,4 +1,3 @@
-import { createReadStream } from 'fs';
 import addOrganizations from '../db/addOrganizations.js';
 import decodeFromWin1251 from '../utils/decodeFromWin1251.js';
 
@@ -31,10 +30,9 @@ const pushOrganizations = async (organizations, organization) => {
   if (index > -1) organizations.splice(index, 1);
   organizations.push(organization);
 
-  if (organizations.length === +process.env.DB_CHUNK_LENGTH) {
-    await addOrganizations(organizations);
-    organizations.splice(0, organizations.length);
-  }
+  if (organizations.length !== +process.env.DB_CHUNK_LENGTH) return;
+  await addOrganizations(organizations);
+  organizations.length = 0;
 };
 
 //= ===========================================================================
@@ -56,12 +54,12 @@ const getOrganization = record => {
 
 //= ===========================================================================
 
-export default async filename => {
-  console.info(new Date().toISOString(), 'START PARSE');
-  const fileStream = createReadStream(filename, { encoding: 'binary' });
+export default async stream => {
+  stream.setEncoding('binary');
+
   let chunks = '';
   const organizations = [];
-  for await (const chunk of fileStream) {
+  for await (const chunk of stream) {
     chunks += chunk;
     const rawRecords = chunks.matchAll(/(?:<RECORD>)(?<record>.*?)<\/RECORD>/g);
 

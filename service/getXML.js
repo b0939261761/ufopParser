@@ -1,6 +1,9 @@
-import { createWriteStream } from 'fs';
 // eslint-disable-next-line import/no-unresolved, node/no-missing-import
 import { pipeline } from 'stream/promises';
+// eslint-disable-next-line import/no-unresolved, node/no-missing-import
+import { unlink } from 'fs/promises';
+import { createWriteStream, createReadStream } from 'fs';
+
 import path from 'path';
 import unzipper from 'unzipper';
 import request from '../utils/request.js';
@@ -17,25 +20,30 @@ const getLinkFile = async link => {
 
 //= ===========================================================================
 
-const unpack = async (stream, fileName) => {
+const unpack = async (streamZip, streamParse, fileName) => {
   const { name } = path.parse(fileName);
-  for await (const entry of stream) {
+  for await (const entry of streamZip) {
     const fileNameInside = path.basename(entry.path);
-    if (fileNameInside.includes(name)) {
-      await pipeline(entry, createWriteStream(fileName));
-    } else {
-      entry.autodrain();
-    }
+    if (fileNameInside.includes(name)) await pipeline(entry, streamParse);
+    else entry.autodrain();
   }
 };
 
 //= ===========================================================================
 
-export default async (link, fileName) => {
+export default async (link, fileName, streamParse) => {
+  const fileNameZip = 'tmp.zip';
   const linkFile = await getLinkFile(link);
 
-  const zip = (await request(linkFile, { responseType: 'stream' }))
-    .pipe(unzipper.Parse({ forceStream: true }));
+  await pipeline(
+    await request(linkFile, { responseType: 'stream' }),
+    createWriteStream(fileNameZip)
+  );
 
-  await unpack(zip, fileName);
+  console.info('START PARSE');
+  const streamZip = createReadStream(fileNameZip).on('error', error => { console.log(1); throw error; })
+    .pipe(unzipper.Parse({ forceStream: true })).on('error', error => { console.log(2); throw error; });
+
+  await unpack(streamZip, streamParse, fileName);
+  await unlink(fileNameZip);
 };
