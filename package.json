@@ -8,8 +8,8 @@
     "serve": "node -r dotenv/config index.js"
   },
   "engines": {
-    "node": "15.4.0",
-    "npm": "7.3"
+    "node": "15.5.0",
+    "npm": "7.3.0"
   },
   "keywords": [],
   "author": "",

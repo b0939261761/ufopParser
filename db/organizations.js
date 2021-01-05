@@ -1,8 +1,8 @@
 import { queryDB } from './db.js';
 
-export default async organizations => {
+export const addOrganizations = organizations => {
   const sql = `
-    INSERT INTO "Organizations" (
+    INSERT INTO "Organizations1" (
       code, manager, "fullName",
       name, address, activity, status
     )
@@ -46,5 +46,9 @@ export default async organizations => {
 
   const values = [codes, managers, fullNames, names, addresses, activities, statuses];
 
-  await queryDB(sql, values);
+  return queryDB(sql, values);
+};
+
+export default {
+  addOrganizations
 };

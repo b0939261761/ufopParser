@@ -18,18 +18,20 @@ export default async (url, options = {}) => {
     timeout: options.timeout ?? 0
   };
 
-  const onRequest = res => {
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      return reject(new Error(`${res.statusCode} ${lib.STATUS_CODES[res.statusCode]}`));
-    }
+  const onRequest = async res => {
+    const { statusCode } = res;
+    if (statusCode < 200 || statusCode >= 300) return reject(new Error(`HTTP: ${statusCode}`));
 
     if (options.responseType === 'stream') return resolve(res);
 
     const data = [];
+    try {
+      for await (const chunk of res) data.push(chunk);
+    } catch (err) {
+      return reject(err);
+    }
 
-    res.on('data', chunk => data.push(chunk));
-    res.on('error', error => reject(error));
-    res.on('end', () => resolve(Buffer.concat(data).toString()));
+    return resolve(Buffer.concat(data).toString());
   };
 
   const request = (res, rej) => {
@@ -37,9 +39,10 @@ export default async (url, options = {}) => {
     const req = lib.request(params, onRequest);
 
     // if (postData) req.write(postData);
-    req.on('error', error => !req.aborted && reject(error));
-    req.on('timeout', () => req.abort());
-    req.end();
+    req
+      .on('error', error => !req.aborted && reject(error))
+      .on('timeout', () => req.abort())
+      .end();
   };
 
   return new Promise(request);

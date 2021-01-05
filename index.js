@@ -1,39 +1,24 @@
-import path from 'path';
 import { performance } from 'perf_hooks';
 import { connectDB, disconnectDB } from './db/db.js';
 import getXML from './service/getXML.js';
 import parseXML from './service/parseXML.js';
+import { formatDate } from './utils/date.js';
+import { delay } from './utils/tools.js';
 
-const PATH_FILES = './files';
+while (true) {
+  const timeStart = performance.now();
+  console.info('START', formatDate('DD.MM.YYYY HH:mm:ss'));
 
-const timeStart = performance.now();
+  try {
+    await connectDB();
+    await getXML(process.env.LINK, process.env.FILENAME, parseXML);
+    const tineEnd = Math.ceil((performance.now() - timeStart) / 60000);
+    console.info('DONE', formatDate('DD.MM.YYYY HH:mm:ss'), `- execute ${tineEnd} minutes`);
+  } catch (error) {
+    console.info('ERROR', formatDate('DD.MM.YYYY HH:mm:ss'));
+    console.error(error);
+  }
+  await disconnectDB();
 
-const link = 'https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10/resource/06bbccbd-e19c-40d5-9e18-447b110c0b4c';
-const filePath = path.join(PATH_FILES, '17.1-EX_XML_EDR_UO.xml');
-
-const getCurrentFormatDateTime = () => {
-  const options = {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric'
-  };
-
-  return new Intl.DateTimeFormat('ru', options).format(new Date());
-};
-
-console.info('START', getCurrentFormatDateTime());
-
-try {
-  await connectDB();
-  await getXML(link, filePath, parseXML);
-} catch (error) {
-  console.error('err', error);
+  await delay(process.env.LOOP_DELAY);
 }
-await disconnectDB();
-
-const tineEnd = Math.ceil((performance.now() - timeStart) / 60000);
-
-console.info('DONE', getCurrentFormatDateTime(), `- execute ${tineEnd} minutes`);

@@ -1,4 +1,4 @@
-import addOrganizations from '../db/addOrganizations.js';
+import { addOrganizations } from '../db/index.js';
 import decodeFromWin1251 from '../utils/decodeFromWin1251.js';
 
 //= ===========================================================================
@@ -32,6 +32,7 @@ const pushOrganizations = async (organizations, organization) => {
 
   if (organizations.length !== +process.env.DB_CHUNK_LENGTH) return;
   await addOrganizations(organizations);
+  // eslint-disable-next-line no-param-reassign
   organizations.length = 0;
 };
 
@@ -56,21 +57,25 @@ const getOrganization = record => {
 
 export default async stream => {
   stream.setEncoding('binary');
+  try {
+    let chunks = '';
+    const organizations = [];
 
-  let chunks = '';
-  const organizations = [];
-  for await (const chunk of stream) {
-    chunks += chunk;
-    const rawRecords = chunks.matchAll(/(?:<RECORD>)(?<record>.*?)<\/RECORD>/g);
+    for await (const chunk of stream) {
+      chunks += chunk;
+      const rawRecords = chunks.matchAll(/(?:<RECORD>)(?<record>.*?)<\/RECORD>/g);
 
-    let lastIndex = 0;
-    for (const rawRecord of rawRecords) {
-      lastIndex = rawRecord.index + rawRecord[0].length;
-      const organization = getOrganization(rawRecord.groups.record);
-      chunks = chunks.slice(lastIndex);
-      await pushOrganizations(organizations, organization);
+      let lastIndex = 0;
+      for (const rawRecord of rawRecords) {
+        lastIndex = rawRecord.index + rawRecord[0].length;
+        const organization = getOrganization(rawRecord.groups.record);
+        chunks = chunks.slice(lastIndex);
+        await pushOrganizations(organizations, organization);
+      }
     }
-  }
 
-  await addOrganizations(organizations);
+    await addOrganizations(organizations);
+  } catch (err) {
+    console.error(err);
+  }
 };

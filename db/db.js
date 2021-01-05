@@ -17,19 +17,6 @@ export const connectDB = () => {
 export const disconnectDB = () => client.end();
 
 export const queryDB = async (sql, values) => client.query(sql, values);
-// try {
-//   const result = ;
-//   return result;
-// // } catch (err) {
-//   console.(err);
-//   throw err;
-// console.log(organizations);
-
-// fs.writeFileSync('error-db.txt', err.toString());
-// fs.writeFileSync('error-db.json', JSON.stringify(organizations));
-// process.exit();
-//   }
-// };
 
 export default {
   queryDB,

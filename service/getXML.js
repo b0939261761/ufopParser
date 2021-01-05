@@ -3,10 +3,13 @@ import { pipeline } from 'stream/promises';
 // eslint-disable-next-line import/no-unresolved, node/no-missing-import
 import { unlink } from 'fs/promises';
 import { createWriteStream, createReadStream } from 'fs';
-
 import path from 'path';
 import unzipper from 'unzipper';
+import { checkDownloadedFiles, addDownloadedFiles } from '../db/index.js';
 import request from '../utils/request.js';
+import { formatDate, parseDate } from '../utils/date.js';
+
+const FILENAME_TMP = './tmp.zip';
 
 //= ===========================================================================
 
@@ -20,30 +23,46 @@ const getLinkFile = async link => {
 
 //= ===========================================================================
 
-const unpack = async (streamZip, streamParse, fileName) => {
+const getFileNameDate = linkFile => {
+  const fileNameDate = linkFile.match(/\d\d-\d\d-\d\d/)?.[0];
+  if (!fileNameDate) throw new Error('FILENAME_NOT_MATCHES');
+  return formatDate('YYYY-MM-DD', parseDate(fileNameDate, 'DD-MM-YY'));
+};
+
+//= ===========================================================================
+
+const unpack = async (streamUnzip, streamParse, fileName) => {
   const { name } = path.parse(fileName);
-  for await (const entry of streamZip) {
+  for await (const entry of streamUnzip) {
     const fileNameInside = path.basename(entry.path);
-    if (fileNameInside.includes(name)) await pipeline(entry, streamParse);
-    else entry.autodrain();
+    if (fileNameInside.includes(name)) {
+      await pipeline(
+        entry.on('error', error => console.error(error)),
+        streamParse
+      );
+    } else entry.autodrain();
   }
 };
 
 //= ===========================================================================
 
 export default async (link, fileName, streamParse) => {
-  const fileNameZip = 'tmp.zip';
   const linkFile = await getLinkFile(link);
+  const fileNameDate = getFileNameDate(linkFile);
+  console.info('FILENAME:', fileNameDate);
+  if (await checkDownloadedFiles(fileNameDate)) throw new Error('FILE_HAS_DOWNLOADED');
 
+  const downloadStream = await request(linkFile, { responseType: 'stream' });
   await pipeline(
-    await request(linkFile, { responseType: 'stream' }),
-    createWriteStream(fileNameZip)
+    downloadStream.on('error', error => console.error(error)),
+    createWriteStream(FILENAME_TMP).on('error', error => console.error(error))
   );
 
   console.info('START PARSE');
-  const streamZip = createReadStream(fileNameZip).on('error', error => { console.log(1); throw error; })
-    .pipe(unzipper.Parse({ forceStream: true })).on('error', error => { console.log(2); throw error; });
+  const streamUnzip = createReadStream(FILENAME_TMP).on('error', error => console.error(error))
+    .pipe(unzipper.Parse({ forceStream: true })).on('error', error => console.error(error));
 
-  await unpack(streamZip, streamParse, fileName);
-  await unlink(fileNameZip);
+  await unpack(streamUnzip, streamParse, fileName);
+  await unlink(FILENAME_TMP);
+  // await addDownloadedFiles(fileNameDate);
 };
