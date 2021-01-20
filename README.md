@@ -35,11 +35,3 @@ WantedBy=multi-user.target
 sudo systemctl enable ufopParser
 sudo systemctl start ufopParser
 ```
-
-
-## Docker
-
-```bash
-# Get local ip
-docker inspect <container-id-or-name> | grep Gateway
-```
