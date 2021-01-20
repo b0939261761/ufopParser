@@ -1,68 +1,67 @@
-// eslint-disable-next-line import/no-unresolved, node/no-missing-import
-import { pipeline } from 'stream/promises';
-// eslint-disable-next-line import/no-unresolved, node/no-missing-import
-import { unlink } from 'fs/promises';
-import { createWriteStream, createReadStream } from 'fs';
-import path from 'path';
-import unzipper from 'unzipper';
-import { checkDownloadedFiles, addDownloadedFiles } from '../db/index.js';
-import request from '../utils/request.js';
-import { formatDate, parseDate } from '../utils/date.js';
-
-const FILENAME_TMP = './tmp.zip';
+import { formatDate } from '../utils/date.js';
 
 //= ===========================================================================
 
-const getLinkFile = async link => {
-  const content = (await request(link, { method: 'get' }));
-  const regexp = /<a class="resource-url-analytics" href="(?<link>.+?)"/;
-  const linkFile = content.match(regexp)?.groups?.link;
-  if (!linkFile) throw new Error('NO_GET_LINK');
-  return linkFile;
-};
+export default class {
+  #type;
+  #insertToDB;
+  #records = [];
 
-//= ===========================================================================
-
-const getFileNameDate = linkFile => {
-  const fileNameDate = linkFile.match(/\d\d-\d\d-\d\d/)?.[0];
-  if (!fileNameDate) throw new Error('FILENAME_NOT_MATCHES');
-  return formatDate('YYYY-MM-DD', parseDate(fileNameDate, 'DD-MM-YY'));
-};
-
-//= ===========================================================================
-
-const unpack = async (streamUnzip, streamParse, fileName) => {
-  const { name } = path.parse(fileName);
-  for await (const entry of streamUnzip) {
-    const fileNameInside = path.basename(entry.path);
-    if (fileNameInside.includes(name)) {
-      await pipeline(
-        entry.on('error', error => console.error(error)),
-        streamParse
-      );
-    } else entry.autodrain();
+  constructor(type, insertToDB) {
+    this.#type = type;
+    this.#insertToDB = insertToDB;
   }
-};
 
-//= ===========================================================================
+  //= ===========================================================================
 
-export default async (link, fileName, streamParse) => {
-  const linkFile = await getLinkFile(link);
-  const fileNameDate = getFileNameDate(linkFile);
-  console.info('FILENAME:', fileNameDate);
-  if (await checkDownloadedFiles(fileNameDate)) throw new Error('FILE_HAS_DOWNLOADED');
+  // eslint-disable-next-line func-names, space-before-function-paren
+  async #pushRecords(record) {
+    this.#records.push(record);
+    if (this.#records.length !== +process.env.DB_CHUNK_LENGTH) return;
+    await this.#insertToDB(this.#records);
+    // eslint-disable-next-line no-param-reassign
+    this.#records.length = 0;
+  }
 
-  const downloadStream = await request(linkFile, { responseType: 'stream' });
-  await pipeline(
-    downloadStream.on('error', error => console.error(error)),
-    createWriteStream(FILENAME_TMP).on('error', error => console.error(error))
-  );
+  //= ===========================================================================
 
-  console.info('START PARSE');
-  const streamUnzip = createReadStream(FILENAME_TMP).on('error', error => console.error(error))
-    .pipe(unzipper.Parse({ forceStream: true })).on('error', error => console.error(error));
+  // eslint-disable-next-line func-names, space-before-function-paren
+  #getRecord(rawRecord) {
+    const rawTags = rawRecord.matchAll(/<(?<tag>(.*?))>(?<content>.*?)<\/(\k<tag>)>/g);
 
-  await unpack(streamUnzip, streamParse, fileName);
-  await unlink(FILENAME_TMP);
-  // await addDownloadedFiles(fileNameDate);
-};
+    const record = {};
+    for (const rawTag of rawTags) record[rawTag.groups.tag] = rawTag.groups.content;
+    return record;
+  }
+
+  //= ===========================================================================
+
+  async streamParse(stream) {
+    console.info('START PARSE:', this.#type, formatDate('DD.MM.YYYY HH:mm:ss'));
+    let countRecord = 0;
+    stream.setEncoding('binary');
+    try {
+      let chunks = '';
+
+      for await (const chunk of stream) {
+        chunks += chunk.replaceAll('\n', '');
+        const rawRecords = chunks.matchAll(/<RECORD>(?<record>.*?)<\/RECORD>/g);
+
+        let lastIndex = 0;
+        for (const rawRecord of rawRecords) {
+          lastIndex = rawRecord.index + rawRecord[0].length;
+          const record = this.#getRecord(rawRecord.groups.record);
+          countRecord += 1;
+          await this.#pushRecords(record);
+        }
+
+        chunks = chunks.slice(lastIndex);
+      }
+
+      await this.#insertToDB(this.#records);
+      console.info('RECORDS:', countRecord, formatDate('DD.MM.YYYY HH:mm:ss'));
+    } catch (err) {
+      console.error(err);
+    }
+  }
+}

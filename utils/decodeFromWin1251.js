@@ -1,6 +1,6 @@
 const decodeMap = {};
 const win1251 = new TextDecoder('windows-1251');
-for (let i = 0; i < 255; i++) {
+for (let i = 0; i <= 255; i++) {
   decodeMap[i] = win1251.decode(Uint8Array.from([i]));
 }
 

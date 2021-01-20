@@ -1,20 +1,21 @@
 import { queryDB } from './db.js';
+import tranformText from '../utils/tranformText.js';
 
-export const addOrganizations = organizations => {
+export const addOrganizations = data => {
   const sql = `
-    INSERT INTO "Organizations1" (
-      code, manager, "fullName",
-      name, address, activity, status
+    INSERT INTO "Organizations" (
+      code, manager, "fullName", name,
+      address, activity, status, "downloadedFile"
     )
     SELECT
-        code, manager, "fullName",
-        name, address, activity, status
+        code, manager, "fullName", name,
+        address, activity, status, "downloadedFile"
       FROM UNNEST (
-        $1::text[], $2::text[], $3::text[],
-        $4::text[], $5::text[], $6::text[], $7::text[]
+        $1::text[], $2::text[], $3::text[], $4::text[],
+        $5::text[], $6::text[], $7::text[], $8::date[]
       ) AS t (
-        code, manager, "fullName",
-        name, address, activity, status
+        code, manager, "fullName", name,
+        address, activity, status, "downloadedFile"
       )
     ON CONFLICT (code) DO UPDATE SET
       manager = EXCLUDED.manager,
@@ -26,25 +27,25 @@ export const addOrganizations = organizations => {
       "updatedAt" = CURRENT_TIMESTAMP
   `;
 
-  const codes = [];
-  const managers = [];
-  const fullNames = [];
-  const names = [];
-  const addresses = [];
-  const activities = [];
-  const statuses = [];
+  const values = [[], [], [], [], [], [], [], []];
 
-  organizations.forEach(el => {
-    codes.push(el.code || '');
-    managers.push(el.manager || '');
-    fullNames.push(el.fullName || '');
-    names.push(el.name || '');
-    addresses.push(el.address || '');
-    activities.push(el.activity || '');
-    statuses.push(el.status || '');
-  });
+  const loopData = item => {
+    const code = item.EDRPOU || '';
 
-  const values = [codes, managers, fullNames, names, addresses, activities, statuses];
+    const lastIndex = values[0].findIndex(el => el === code);
+    if (lastIndex !== -1) values.forEach(arr => arr.splice(lastIndex, 1));
+
+    values[0].push(code);
+    values[1].push(tranformText(item.BOSS));
+    values[2].push(tranformText(item.NAME));
+    values[3].push(tranformText(item.SHORT_NAME));
+    values[4].push(tranformText(item.ADDRESS));
+    values[5].push(tranformText(item.KVED));
+    values[6].push(tranformText(item.STAN));
+    values[7].push(globalThis.filenameDate);
+  };
+
+  data.forEach(loopData);
 
   return queryDB(sql, values);
 };

@@ -5,10 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "serve": "node -r dotenv/config index.js"
+    "serve": "node -r dotenv/config index.js dotenv_config_path=.env.development"
   },
   "engines": {
-    "node": "15.5.0",
+    "node": "15.6.0",
     "npm": "7.3.0"
   },
   "keywords": [],
@@ -17,6 +17,8 @@
   "devDependencies": {
     "@babel/core": "^7.12.10",
     "@babel/eslint-parser": "^7.12.1",
+    "@babel/plugin-proposal-class-properties": "^7.12.1",
+    "@babel/plugin-syntax-class-properties": "^7.12.1",
     "@babel/plugin-syntax-top-level-await": "^7.12.1",
     "dotenv": "^8.2.0",
     "eslint": "^7.16.0",

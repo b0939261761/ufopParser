@@ -16,6 +16,7 @@ module.exports = {
     'no-plusplus': 'off',
     'no-await-in-loop': 'off',
     'no-empty': ['error', { allowEmptyCatch: true }],
+    'lines-between-class-members': ['error', 'always', { exceptAfterSingleLine: true }],
 
     'no-param-reassign': ['error', {
       props: true,

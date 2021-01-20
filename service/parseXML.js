@@ -1,81 +1,67 @@
-import { addOrganizations } from '../db/index.js';
-import decodeFromWin1251 from '../utils/decodeFromWin1251.js';
+import { formatDate } from '../utils/date.js';
 
 //= ===========================================================================
 
-const modifyContent = str => {
-  const result = str
-    .trim()
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', '"');
-  return decodeFromWin1251(result);
-};
+export default class {
+  #type;
+  #insertToDB;
+  #records = [];
 
-//= ===========================================================================
-
-const structure = {
-  EDRPOU: { name: 'code' },
-  NAME: { name: 'fullName', transform: true },
-  SHORT_NAME: { name: 'name', transform: true },
-  KVED: { name: 'activity', transform: true },
-  ADDRESS: { name: 'address', transform: true },
-  BOSS: { name: 'manager', transform: true },
-  STAN: { name: 'status', transform: true }
-};
-
-//= ===========================================================================
-
-const pushOrganizations = async (organizations, organization) => {
-  const index = organizations.findIndex(el => el.code === organization.code);
-  if (index > -1) organizations.splice(index, 1);
-  organizations.push(organization);
-
-  if (organizations.length !== +process.env.DB_CHUNK_LENGTH) return;
-  await addOrganizations(organizations);
-  // eslint-disable-next-line no-param-reassign
-  organizations.length = 0;
-};
-
-//= ===========================================================================
-
-const getOrganization = record => {
-  const rawTags = record.matchAll(/<(?<tag>(.*?))>(?<content>.*?)<\/(\k<tag>)>/g);
-
-  const organization = {};
-  for (const rawTag of rawTags) {
-    const { tag, content } = rawTag.groups;
-    const field = structure[tag];
-    if (field) {
-      const value = field.transform ? modifyContent(content) : content;
-      organization[field.name] = value;
-    }
+  constructor(type, insertToDB) {
+    this.#type = type;
+    this.#insertToDB = insertToDB;
   }
-  return organization;
-};
 
-//= ===========================================================================
+  //= ===========================================================================
 
-export default async stream => {
-  stream.setEncoding('binary');
-  try {
-    let chunks = '';
-    const organizations = [];
+  // eslint-disable-next-line func-names, space-before-function-paren
+  async #pushRecords(record) {
+    this.#records.push(record);
+    if (this.#records.length !== +process.env.DB_CHUNK_LENGTH) return;
+    await this.#insertToDB(this.#records);
+    // eslint-disable-next-line no-param-reassign
+    this.#records.length = 0;
+  }
 
-    for await (const chunk of stream) {
-      chunks += chunk;
-      const rawRecords = chunks.matchAll(/(?:<RECORD>)(?<record>.*?)<\/RECORD>/g);
+  //= ===========================================================================
 
-      let lastIndex = 0;
-      for (const rawRecord of rawRecords) {
-        lastIndex = rawRecord.index + rawRecord[0].length;
-        const organization = getOrganization(rawRecord.groups.record);
+  // eslint-disable-next-line func-names, space-before-function-paren
+  #getRecord(rawRecord) {
+    const rawTags = rawRecord.matchAll(/<(?<tag>(.*?))>(?<content>.*?)<\/(\k<tag>)>/g);
+
+    const record = {};
+    for (const rawTag of rawTags) record[rawTag.groups.tag] = rawTag.groups.content;
+    return record;
+  }
+
+  //= ===========================================================================
+
+  async streamParse(stream) {
+    console.info('START PARSE:', this.#type, formatDate('DD.MM.YYYY HH:mm:ss'));
+    let countRecord = 0;
+    stream.setEncoding('binary');
+    try {
+      let chunks = '';
+
+      for await (const chunk of stream) {
+        chunks += chunk.replaceAll('\n', '');
+        const rawRecords = chunks.matchAll(/<RECORD>(?<record>.*?)<\/RECORD>/g);
+
+        let lastIndex = 0;
+        for (const rawRecord of rawRecords) {
+          lastIndex = rawRecord.index + rawRecord[0].length;
+          const record = this.#getRecord(rawRecord.groups.record);
+          countRecord += 1;
+          await this.#pushRecords(record);
+        }
+
         chunks = chunks.slice(lastIndex);
-        await pushOrganizations(organizations, organization);
       }
-    }
 
-    await addOrganizations(organizations);
-  } catch (err) {
-    console.error(err);
+      await this.#insertToDB(this.#records);
+      console.info('RECORDS:', countRecord, formatDate('DD.MM.YYYY HH:mm:ss'));
+    } catch (err) {
+      console.error(err);
+    }
   }
-};
+}
