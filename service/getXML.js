@@ -13,9 +13,9 @@ export default async filename => {
     .pipe(unzipper.Parse({ forceStream: true })).on('error', error => console.error(error));
 
   const organizations = new ParseXML('Organizations', addOrganizations);
-  const persons = new ParseXML('Persons', addPersons);
   const streamOrganizations = organizations.streamParse.bind(organizations);
-  const streamPersons = persons.streamParse.bind(persons);
+  // const persons = new ParseXML('Persons', addPersons);
+  // const streamPersons = persons.streamParse.bind(persons);
 
   for await (const entry of streamUnzip) {
     const fileNameInside = path.basename(entry.path).slice(0, 4);
