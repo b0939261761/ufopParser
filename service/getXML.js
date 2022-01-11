@@ -1,67 +1,36 @@
-import { formatDate } from '../utils/date.js';
+// eslint-disable-next-line import/no-unresolved, node/no-missing-import
+import { pipeline } from 'stream/promises';
+import { createReadStream } from 'fs';
+import path from 'path';
+import unzipper from 'unzipper';
+import ParseXML from './parseXML.js';
+import { addOrganizations, addPersons } from '../db/index.js';
 
 //= ===========================================================================
 
-export default class {
-  #type;
-  #insertToDB;
-  #records = [];
+export default async filename => {
+  const streamUnzip = createReadStream(filename).on('error', error => console.error(error))
+    .pipe(unzipper.Parse({ forceStream: true })).on('error', error => console.error(error));
 
-  constructor(type, insertToDB) {
-    this.#type = type;
-    this.#insertToDB = insertToDB;
-  }
+  const organizations = new ParseXML('Organizations', addOrganizations);
+  const persons = new ParseXML('Persons', addPersons);
+  const streamOrganizations = organizations.streamParse.bind(organizations);
+  const streamPersons = persons.streamParse.bind(persons);
 
-  //= ===========================================================================
+  for await (const entry of streamUnzip) {
+    const fileNameInside = path.basename(entry.path).slice(0, 4);
+    let streamParse;
 
-  // eslint-disable-next-line func-names, space-before-function-paren
-  async #pushRecords(record) {
-    this.#records.push(record);
-    if (this.#records.length !== +process.env.DB_CHUNK_LENGTH) return;
-    await this.#insertToDB(this.#records);
-    // eslint-disable-next-line no-param-reassign
-    this.#records.length = 0;
-  }
+    if (fileNameInside === '17.1') streamParse = streamOrganizations;
+    // else if (fileNameInside === '17.2') streamParse = streamPersons;
 
-  //= ===========================================================================
-
-  // eslint-disable-next-line func-names, space-before-function-paren
-  #getRecord(rawRecord) {
-    const rawTags = rawRecord.matchAll(/<(?<tag>(.*?))>(?<content>.*?)<\/(\k<tag>)>/g);
-
-    const record = {};
-    for (const rawTag of rawTags) record[rawTag.groups.tag] = rawTag.groups.content;
-    return record;
-  }
-
-  //= ===========================================================================
-
-  async streamParse(stream) {
-    console.info('START PARSE:', this.#type, formatDate('DD.MM.YYYY HH:mm:ss'));
-    let countRecord = 0;
-    stream.setEncoding('binary');
-    try {
-      let chunks = '';
-
-      for await (const chunk of stream) {
-        chunks += chunk.replaceAll('\n', '');
-        const rawRecords = chunks.matchAll(/<RECORD>(?<record>.*?)<\/RECORD>/g);
-
-        let lastIndex = 0;
-        for (const rawRecord of rawRecords) {
-          lastIndex = rawRecord.index + rawRecord[0].length;
-          const record = this.#getRecord(rawRecord.groups.record);
-          countRecord += 1;
-          await this.#pushRecords(record);
-        }
-
-        chunks = chunks.slice(lastIndex);
-      }
-
-      await this.#insertToDB(this.#records);
-      console.info('RECORDS:', countRecord, formatDate('DD.MM.YYYY HH:mm:ss'));
-    } catch (err) {
-      console.error(err);
+    if (streamParse) {
+      await pipeline(
+        entry.on('error', error => console.error(error)),
+        streamParse
+      );
+    } else {
+      entry.autodrain();
     }
   }
-}
+};
